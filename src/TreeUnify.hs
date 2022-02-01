@@ -41,6 +41,15 @@ extendEnv' x y (Env e) = Env ((x,y) : e)
 newtype UnifyError = UnifyError String
   deriving (Show)
 
+cannotUnify :: (Show a, Show b) => a -> b -> Unifier t r
+cannotUnify x y =
+  Unifier . lift . Left . UnifyError $ unlines
+    ["Unify error: Cannot match "
+    ,"  " ++ show x
+    ,"with"
+    ,"  " ++ show y
+    ]
+
 unifyGuard :: (Show a, Show b) => a -> b -> Bool -> Unifier t ()
 unifyGuard _ _ True = pure ()
 unifyGuard x y False = cannotUnify x y

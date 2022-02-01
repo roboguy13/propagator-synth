@@ -46,6 +46,10 @@ instance Eq host => Subst Int (UnifyVar host) where
 
   -- unifyReconstruct :: [a] -> a
 
+data UnifyVar a
+  = UnifyVar (VarTy a)
+  | HostVar a
+
 data UnifyParts a
   = UnifyChildren ([a] -> a) [a]
   | UnifyLeaf (a -> Bool)
@@ -68,6 +72,7 @@ lookupEnv' x (Env e) = lookup x e
 
 extendEnv' :: a -> t -> Env a t -> Env a t
 extendEnv' x y (Env e) = Env ((x,y) : e)
+
 newtype WorkList a = WorkList { getWorkList :: [(a, a)] }
   deriving (Semigroup, Monoid)
 
