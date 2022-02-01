@@ -5,6 +5,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Unify
   where
@@ -20,12 +21,6 @@ import           Lens.Micro
 import           Lens.Micro.TH
 import           Lens.Micro.Mtl
 
-data UnifyVar host
-  = UnifyVar (Int, host)
-
-getUniq :: UnifyVar a -> Int
-getUniq (UnifyVar (i, _)) = i
-
 {-
 instance Eq host => Subst Int (UnifyVar host) where
   type Var (UnifyVar host) = Int
@@ -36,51 +31,56 @@ instance Eq host => Subst Int (UnifyVar host) where
   -- subst = _
 -}
 
+-- data UnifyParts a
+--   = UnifyChildren ([a] -> a) [a]
+--   | UnifyLeaf (a -> Bool)
+
+-- class Unify a where
+--   type HostVar a
+
+--   isUnifyVar :: a -> Maybe (UnifyVar (HostVar a))
+
+--   -- | Get the immediate children (does not include itself) and
+--   -- a reconstruction function.
+--   unifyParts :: a -> UnifyParts a
+
+  -- unifyReconstruct :: [a] -> a
+
 data UnifyParts a
   = UnifyChildren ([a] -> a) [a]
   | UnifyLeaf (a -> Bool)
 
-class Unify a where
-  type HostVar a
-
-  isUnifyVar :: a -> Maybe (UnifyVar (HostVar a))
+class (Eq (VarTy a)) => Unify a where
+  type VarTy a
 
   -- | Get the immediate children (does not include itself) and
   -- a reconstruction function.
-  unifyParts :: a -> UnifyParts a
+  unifyParts :: a -> Either (VarTy a) (UnifyParts a)
 
-  -- unifyReconstruct :: [a] -> a
+newtype Env a b = Env [(a, b)]
+  deriving (Show)
 
-newtype Env a = Env [(Int, a)]
-  deriving (Semigroup, Monoid)
+emptyEnv :: Env a b
+emptyEnv = Env []
 
-lookupEnv' :: Int -> Env a -> Maybe a
-lookupEnv' i (Env e) = lookup i e
+lookupEnv' :: Eq a => a -> Env a t -> Maybe t
+lookupEnv' x (Env e) = lookup x e
 
--- -- | Gives back a 'Left' if the name already exists in the environment.
--- extendEnv' :: Int -> a -> Env a -> Either a (Env a)
--- extendEnv' i x (Env e) =
---   case lookup i e of
---     Nothing -> Right (Env ((i, x) : e))
---     Just z -> Left z
-
-extendEnv' :: Int -> a -> Env a -> Env a
-extendEnv' i x (Env e) = Env ((i, x) : e)
-
+extendEnv' :: a -> t -> Env a t -> Env a t
+extendEnv' x y (Env e) = Env ((x,y) : e)
 newtype WorkList a = WorkList { getWorkList :: [(a, a)] }
   deriving (Semigroup, Monoid)
 
 data UnifierState a =
   UnifierState
   { _unifierStateUniq :: Int
-  , _unifierStateWorkList :: WorkList a
-  , _unifierEnv :: Env a
+  , _unifierEnv :: Env (VarTy a) a
   }
 
 makeLenses ''UnifierState
 
 initState :: UnifierState a
-initState = UnifierState 0 mempty mempty
+initState = UnifierState 0 emptyEnv
 
 newtype UnifyError = UnifyError String
   deriving (Show)
@@ -95,19 +95,19 @@ evalUnifier = flip evalStateT initState . runUnifier
 unifyError :: String -> Unifier a r
 unifyError str = Unifier . lift . Left . UnifyError $ str
 
-nextWorkListItem :: Unifier a (Maybe (a, a))
-nextWorkListItem =
-  use unifierStateWorkList >>= \case
-    WorkList [] -> pure Nothing
-    WorkList (x:_) -> pure (Just x)
+-- nextWorkListItem :: Unifier a (Maybe (a, a))
+-- nextWorkListItem =
+--   use unifierStateWorkList >>= \case
+--     WorkList [] -> pure Nothing
+--     WorkList (x:_) -> pure (Just x)
 
-extendWorkList :: forall a. a -> a -> Unifier a ()
-extendWorkList x y = unifierStateWorkList %= coerce ((x,y) :)
+-- extendWorkList :: forall a. a -> a -> Unifier a ()
+-- extendWorkList x y = unifierStateWorkList %= coerce ((x,y) :)
 
-lookupEnv :: Int -> Unifier a (Maybe a)
+lookupEnv :: Unify a => VarTy a -> Unifier a (Maybe a)
 lookupEnv i = lookupEnv' i <$> use unifierEnv
 
-extendEnv :: forall a. Int -> a -> Unifier a ()
+extendEnv :: forall a. VarTy a -> a -> Unifier a ()
 extendEnv i x = unifierEnv %= extendEnv' i x
 -- extendEnv i x = do
 --   e <- use unifierEnv
@@ -118,44 +118,45 @@ extendEnv i x = unifierEnv %= extendEnv' i x
 --       unifierEnv .= e'
 --       pure Nothing
 
--- | Generate worklist items
-generate :: Unify a => a -> Unifier a ()
-generate = undefined
-
--- | Solve worklist item
-solveItem :: (Show a, Unify a) => (a, a) -> Unifier a ()
-solveItem (x0, y0) =
-  case (isUnifyVar x0, isUnifyVar y0) of
-    (Just x, Just {}) -> extendEnv (getUniq x) y0
-    (Just x, Nothing) -> extendEnv (getUniq x) y0
-    (Nothing, Just y) -> extendEnv (getUniq y) x0
-
-    (Nothing, Nothing) ->
-      case (unifyParts x0, unifyParts y0) of
-        (UnifyLeaf f, UnifyLeaf g) ->
-          unifyGuard x0 y0 (f y0 && g x0)
-
-        (UnifyChildren f xs, UnifyChildren g ys) -> do
-          zipped <- zipSameLength (f, xs) (g, ys)
-          mapM_ solveItem zipped
-
-        (_, _) -> unifyGuard x0 y0 False
+cannotUnify :: (Show a, Show b) => a -> b -> Unifier t r
+cannotUnify x y =
+  Unifier . lift . Left . UnifyError $ unlines
+    ["Unify error: Cannot match "
+    ,"  " ++ show x
+    ,"with"
+    ,"  " ++ show y
+    ]
 
 unifyGuard :: (Show a, Show b) => a -> b -> Bool -> Unifier x ()
 unifyGuard _ _ True = pure ()
-unifyGuard x y False =
-  unifyError $
-    unlines
-      ["Unify error: Cannot match "
-      ,"  " ++ show x
-      ,"with"
-      ,"  " ++ show y
-      ]
+unifyGuard x y False = cannotUnify x y
 
 zipSameLength :: (Show a, Show b) => ([a] -> a, [a]) -> ([b] -> b, [b]) -> Unifier x [(a, b)]
 zipSameLength (f, xs) (g, ys) = do
   unifyGuard (f xs) (g ys) (length xs == length ys)
   pure $ zip xs ys
 
--- unify :: 
+unify :: (Unify t, Show t) => t -> t -> Unifier t ()
+unify x y =
+  case (unifyParts x, unifyParts y) of
+    (Left n, Right {}) ->
+        lookupEnv n >>= \case
+          Just t -> unify t y
+          Nothing -> extendEnv n y
 
+    (Right {}, Left n) -> unify y x
+
+    (Right (UnifyLeaf f), Right (UnifyLeaf g)) -> unifyGuard x y (f y && g x)
+    (Right (UnifyLeaf {}), Right (UnifyChildren {})) -> cannotUnify x y
+    (Right (UnifyChildren {}), Right (UnifyLeaf {})) -> cannotUnify x y
+
+    (Right (UnifyChildren f xs), Right (UnifyChildren g ys)) -> do
+      zipped <- zipSameLength (f, xs) (g, ys)
+      mapM_ (uncurry unify) zipped
+
+    (Left nX, Left nY) ->
+      liftA2 (,) (lookupEnv nX) (lookupEnv nY) >>= \case
+        (Nothing, Nothing) -> extendEnv nX y
+        (Just xVal, Nothing) -> extendEnv nY xVal
+        (Nothing, Just yVal) -> extendEnv nX yVal
+        (Just x, Just y) -> unify x y

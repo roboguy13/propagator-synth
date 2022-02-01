@@ -41,15 +41,6 @@ extendEnv' x y (Env e) = Env ((x,y) : e)
 newtype UnifyError = UnifyError String
   deriving (Show)
 
-cannotUnify :: (Show a, Show b) => a -> b -> Unifier t r
-cannotUnify x y =
-  Unifier . lift . Left . UnifyError $ unlines
-    ["Unify error: Cannot match "
-    ,"  " ++ show x
-    ,"with"
-    ,"  " ++ show y
-    ]
-
 unifyGuard :: (Show a, Show b) => a -> b -> Bool -> Unifier t ()
 unifyGuard _ _ True = pure ()
 unifyGuard x y False = cannotUnify x y
@@ -107,37 +98,12 @@ unify x y =
         (Nothing, Just yVal) -> extendEnv nX yVal
         (Just x, Just y) -> unify x y
 
-
--- unify (Var n) t2@(Node n2 ys0) =
---   lookupEnv n >>= \case
---     Just t -> unify t t2
---     Nothing -> extendEnv n t2
-
--- unify t1@(Node {}) v2@(Var {}) = unify v2 t1
-
--- unify t1@(Node n1 xs0) t2@(Node n2 ys0) = do
---   unifyGuard t1 t2 (n1 == n2)
-
---   zipped <- zipSameLength (Node n1, xs0) (Node n2, ys0)
---   mapM_ (uncurry unify) zipped
-
--- unify (Var n1) (Var n2) = do
---   liftA2 (,) (lookupEnv n1) (lookupEnv n2) >>= \case
---     (Nothing, Nothing) -> extendEnv n1 (Var n2)
---     (Just x, Nothing) -> extendEnv n2 x
---     (Nothing, Just y) -> extendEnv n1 y
---     (Just x, Just y) -> unify x y
-
 data UnifyParts a
   = UnifyChildren ([a] -> a) [a]
   | UnifyLeaf (a -> Bool)
 
 class (Eq (VarTy a)) => Unify a where
   type VarTy a
-
-  -- var :: VarTy a -> a
-
-  -- isUnifyVar :: a -> Maybe (VarTy a)
 
   -- | Get the immediate children (does not include itself) and
   -- a reconstruction function.
