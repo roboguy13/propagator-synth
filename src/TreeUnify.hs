@@ -15,6 +15,8 @@ import           Data.Void
 import           Control.Monad.State
 import           Control.Applicative
 
+import           Unify
+
 import           Lens.Micro
 import           Lens.Micro.Mtl
 
@@ -23,100 +25,6 @@ data Tree a = Node String [Tree a] | Var a deriving (Show)
 -- IsString instances for convenience
 instance IsString (Tree a) where
   fromString x = Node x []
-
-newtype Env a b = Env [(a, b)]
-  deriving (Show)
-
--- type Env a = Env' a a
-
-emptyEnv :: Env a b
-emptyEnv = Env []
-
-lookupEnv' :: Eq a => a -> Env a t -> Maybe t
-lookupEnv' x (Env e) = lookup x e
-
-extendEnv' :: a -> t -> Env a t -> Env a t
-extendEnv' x y (Env e) = Env ((x,y) : e)
-
-newtype UnifyError = UnifyError String
-  deriving (Show)
-
-cannotUnify :: (Show a, Show b) => a -> b -> Unifier t r
-cannotUnify x y =
-  Unifier . lift . Left . UnifyError $ unlines
-    ["Unify error: Cannot match "
-    ,"  " ++ show x
-    ,"with"
-    ,"  " ++ show y
-    ]
-
-unifyGuard :: (Show a, Show b) => a -> b -> Bool -> Unifier t ()
-unifyGuard _ _ True = pure ()
-unifyGuard x y False = cannotUnify x y
-
-newtype Unifier' a t r = Unifier { runUnifier :: StateT (Env a t) (Either UnifyError) r }
-  deriving (Functor, Applicative, Monad, MonadState (Env a t))
-
-type Unifier t = Unifier' (VarTy t) t
-
-evalUnifier :: Unifier t r -> Either UnifyError (Env (VarTy t) t)
-evalUnifier = flip execStateT emptyEnv . runUnifier
-
-lookupEnv :: Unify t => VarTy t -> Unifier t (Maybe t)
-lookupEnv x = lookupEnv' x <$> get
-
-extendEnv :: Unify t => VarTy t -> t -> Unifier t ()
-extendEnv x t = modify (extendEnv' x t)
-
-zipSameLength :: (Show a, Show b) => ([a] -> a, [a]) -> ([b] -> b, [b]) -> Unifier t [(a, b)]
-zipSameLength (f, xs) (g, ys) = do
-  unifyGuard (f xs) (g ys) (length xs == length ys)
-  pure $ zip xs ys
-
-unify' :: (Unify t, Show t) => t -> t -> Either UnifyError (Env (VarTy t) t)
-unify' x = evalUnifier . unify x
-
-unify'' :: (Unify t, Show (VarTy t), Show t) => t -> t -> String
-unify'' x y =
-  case unify' x y of
-    Left (UnifyError str) -> str
-    Right r -> show r
-
-unify :: (Unify t, Show t) => t -> t -> Unifier t ()
-unify x y =
-  case (unifyParts x, unifyParts y) of
-    (Left n, Right {}) ->
-        lookupEnv n >>= \case
-          Just t -> unify t y
-          Nothing -> extendEnv n y
-
-    (Right {}, Left n) -> unify y x
-
-    (Right (UnifyLeaf f), Right (UnifyLeaf g)) -> unifyGuard x y (f y && g x)
-    (Right (UnifyLeaf {}), Right (UnifyChildren {})) -> cannotUnify x y
-    (Right (UnifyChildren {}), Right (UnifyLeaf {})) -> cannotUnify x y
-
-    (Right (UnifyChildren f xs), Right (UnifyChildren g ys)) -> do
-      zipped <- zipSameLength (f, xs) (g, ys)
-      mapM_ (uncurry unify) zipped
-
-    (Left nX, Left nY) ->
-      liftA2 (,) (lookupEnv nX) (lookupEnv nY) >>= \case
-        (Nothing, Nothing) -> extendEnv nX y
-        (Just xVal, Nothing) -> extendEnv nY xVal
-        (Nothing, Just yVal) -> extendEnv nX yVal
-        (Just x, Just y) -> unify x y
-
-data UnifyParts a
-  = UnifyChildren ([a] -> a) [a]
-  | UnifyLeaf (a -> Bool)
-
-class (Eq (VarTy a)) => Unify a where
-  type VarTy a
-
-  -- | Get the immediate children (does not include itself) and
-  -- a reconstruction function.
-  unifyParts :: a -> Either (VarTy a) (UnifyParts a)
 
 instance Unify (Tree String) where
   type VarTy (Tree String) = String

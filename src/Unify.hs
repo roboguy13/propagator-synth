@@ -94,8 +94,8 @@ newtype UnifyError = UnifyError String
 newtype Unifier a r = Unifier { runUnifier :: StateT (UnifierState a) (Either UnifyError) r }
   deriving (Functor, Applicative, Monad, MonadState (UnifierState a))
 
-evalUnifier :: Unifier a r -> Either UnifyError r
-evalUnifier = flip evalStateT initState . runUnifier
+execUnifier :: Unifier a r -> Either UnifyError (UnifierState a)
+execUnifier = flip execStateT initState . runUnifier
 
 unifyError :: String -> Unifier a r
 unifyError str = Unifier . lift . Left . UnifyError $ str
@@ -141,6 +141,15 @@ zipSameLength (f, xs) (g, ys) = do
   unifyGuard (f xs) (g ys) (length xs == length ys)
   pure $ zip xs ys
 
+unify' :: (Unify t, Show t) => t -> t -> Either UnifyError (Env (VarTy t) t)
+unify' x = fmap _unifierEnv . execUnifier . unify x
+
+unify'' :: (Unify t, Show (VarTy t), Show t) => t -> t -> String
+unify'' x y =
+  case unify' x y of
+    Left (UnifyError str) -> str
+    Right r -> show r
+
 unify :: (Unify t, Show t) => t -> t -> Unifier t ()
 unify x y =
   case (unifyParts x, unifyParts y) of
@@ -165,3 +174,4 @@ unify x y =
         (Just xVal, Nothing) -> extendEnv nY xVal
         (Nothing, Just yVal) -> extendEnv nX yVal
         (Just x, Just y) -> unify x y
+
