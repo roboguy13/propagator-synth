@@ -49,24 +49,12 @@ instance Eq a => Subst1 (UVar a) (Tree a) where
   subst1 uv e (Node str ts) = Node str $ map (subst1 uv e) ts
 
 instance Unify Tree where
-  -- type VarTy (Tree String) = String
-
   traverseUVars f (Var uv) = Var <$> f uv
   traverseUVars f (Node str ts) = Node str <$> traverse (traverseUVars f) ts
 
   unifyParts (Var v) = UnifyVar v
   unifyParts (Node n []) = UnifyLeaf (\case Node n' [] -> n' == n; _ -> False)
-  unifyParts n0@(Node _ xs) = (UnifyChildren n0 (map SomeF xs))
-
--- solveVarEqs :: forall a. Env a -> Env' a Void
--- solveVarEqs e0 = go e0
---   where
---     go :: Env a -> Env' a Void
---     go (Env []) = emptyEnv
---     go (Env ((v, x):rest)) =
---       case x of
---         Var v2 -> undefined
---         Node n ys -> undefined --extendEnv' v (Node n ys) undefined --(go (Env rest))
+  unifyParts n0@(Node _ xs) = UnifyNode (map SomeF xs)
 
 test0 :: Tree' String
 test0 = Node "f" []

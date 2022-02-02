@@ -17,6 +17,8 @@ module Expr
 import           Data.String
 import           GHC.Tuple (Solo (..))
 
+import           Data.Void
+
 import           Subst
 import           Unify
 
@@ -30,7 +32,8 @@ onPair :: (a -> a -> b) -> Pair a -> b
 onPair f (Pair x y) = f x y
 
 data Expr n a where
-  ExprVar :: n -> Expr n Int
+  ExprVar :: String -> Expr n Int
+  ExprUVar :: UVar n -> Expr n a
   Lit :: Int -> Expr n Int
   ExprTrue :: Expr n Bool
   ExprFalse :: Expr n Bool
@@ -41,11 +44,15 @@ data Expr n a where
   Mul :: Expr n Int -> Expr n Int -> Expr n Int
   ExprLe :: Expr n Int -> Expr n Int -> Expr n Bool
 
+  -- | Expr without unification variables
+type Expr' = Expr Void
+
 deriving instance Show n => Show (Expr n a)
 deriving instance Eq n => Eq (Expr n a)
 
-instance forall n. IsString n => IsString (Expr n Int) where
-  fromString = ExprVar . fromString @n
+instance IsString (Expr () Int) where
+  fromString s = ExprUVar (UVar s ())
+  -- fromString = ExprVar . fromString @n
 
 exprSize :: Expr n a -> Int
 exprSize (ExprVar _) = 1
@@ -59,23 +66,37 @@ exprSize (Negate x) = succ (exprSize x)
 exprSize (Mul x y) = succ (exprSize x + exprSize y)
 exprSize (ExprLe x y) = succ (exprSize x + exprSize y)
 
-instance forall n. Eq n => Unify (Expr (UnifyVar n UVar)) where
-  type VarTy (Expr (UnifyVar n UVar)) = UVar
+instance Unify Expr where
+  -- type VarTy (Expr (UnifyVar n UVar)) = UVar
 
   -- unifyParts :: Expr (UnifyVar n UVar) a -> Either UVar (UnifyParts (Expr (UnifyVar n UVar) a))
-  unifyParts (ExprVar (UnifyVar v)) = Left v
+  unifyParts (ExprVar v) = UnifyLeaf undefined
+  unifyParts (ExprUVar v) = UnifyVar v
 
-  unifyParts (ExprVar (HostVar v)) = Right $ UnifyLeaf (\case ExprVar (HostVar v') -> v' == v; _ -> False)
-  unifyParts (Lit i) = Right $ UnifyLeaf (\case Lit i' -> i' == i; _ -> False)
-  unifyParts ExprTrue = Right $ UnifyLeaf (\case ExprTrue -> True; _ -> False)
-  unifyParts ExprFalse = Right $ UnifyLeaf (\case ExprFalse -> True; _ -> False)
+  -- unifyParts (ExprVar (HostVar v)) = Right $ UnifyLeaf (\case ExprVar (HostVar v') -> v' == v; _ -> False)
+  unifyParts (Lit i) = UnifyLeaf (\case Lit i' -> i' == i; _ -> False)
+  unifyParts ExprTrue = UnifyLeaf (\case ExprTrue -> True; _ -> False)
+  unifyParts ExprFalse = UnifyLeaf (\case ExprFalse -> True; _ -> False)
 
-  unifyParts (ExprNot x) = Right $ UnifyChildren (ExprNot . getSolo) (Solo x)
-  unifyParts (ExprAnd x y) = Right $ UnifyChildren (onPair ExprAnd) (Pair x y)
-  unifyParts (Add x y) = Right $ UnifyChildren (onPair Add) (Pair x y)
-  unifyParts (Negate x) = Right $ UnifyChildren (Negate . getSolo) (Solo x)
-  unifyParts (Mul x y) = Right $ UnifyChildren (onPair Mul) (Pair x y)
-  unifyParts (ExprLe x y) = Right $ UnifyChildren (onPair ExprLe) (Pair x y)
+  unifyParts (ExprNot x) = UnifyNode [SomeF x]
+  unifyParts (ExprAnd x y) = UnifyNode [SomeF x, SomeF y]
+  unifyParts (Add x y) = UnifyNode [SomeF x, SomeF y]
+  unifyParts (Negate x) = UnifyNode [SomeF x]
+  unifyParts (Mul x y) = UnifyNode [SomeF x, SomeF y]
+  unifyParts (ExprLe x y) = UnifyNode [SomeF x, SomeF y]
+
+
+  traverseUVars f (ExprVar v) = pure $ ExprVar v
+  traverseUVars f (ExprUVar v) = ExprUVar <$> f v
+  traverseUVars f (Lit i) = pure (Lit i)
+  traverseUVars f ExprTrue = pure ExprTrue
+  traverseUVars f ExprFalse = pure ExprFalse
+  traverseUVars f (ExprNot b) = ExprNot <$> traverseUVars f b
+  traverseUVars f (ExprAnd x y) = ExprAnd <$> traverseUVars f x <*> traverseUVars f y
+  traverseUVars f (Add x y) = Add <$> traverseUVars f x <*> traverseUVars f y
+  traverseUVars f (Negate x) = Negate <$> traverseUVars f x
+  traverseUVars f (Mul x y) = Mul <$> traverseUVars f x <*> traverseUVars f y
+  traverseUVars f (ExprLe x y) = ExprLe <$> traverseUVars f x <*> traverseUVars f y
 
 class Sized a where
   size :: a -> Int
@@ -89,8 +110,27 @@ instance Sized (Expr n a) where
 -- instance Ord (Expr n a) where
 --   compare x y = compare (exprSize x) (exprSize y)
 
+instance Eq n => Subst1 (UVar n) (Expr n) where
+  -- type Var (Expr n a) = Expr n Int
+
+  var1 = ExprUVar
+
+  -- subst :: Name -> Expr n Int -> Expr n a -> Expr n a
+  subst1 _ _ (ExprVar v) = ExprVar v
+  subst1 n e (ExprUVar v) = naiveSubst1 n e v
+  subst1 _ _ e'@(Lit {}) = e'
+  subst1 _ _ ExprTrue = ExprTrue
+  subst1 _ _ ExprFalse = ExprFalse
+  subst1 n e (ExprNot e') = ExprNot (subst1 n e e')
+  subst1 n e (ExprAnd x y) = ExprAnd (subst1 n e x) (subst1 n e y)
+  subst1 n e (Add x y) = Add (subst1 n e x) (subst1 n e y)
+  subst1 n e (Negate x) = Negate (subst1 n e x)
+  subst1 n e (Mul x y) = Mul (subst1 n e x) (subst1 n e y)
+  subst1 n e (ExprLe x y) = ExprLe (subst1 n e x) (subst1 n e y)
+
+{-
 instance Eq n => Subst n (Expr n a) where
-  type Var (Expr n a) = Expr n Int
+  -- type Var (Expr n a) = Expr n Int
 
   var = ExprVar
 
@@ -105,4 +145,4 @@ instance Eq n => Subst n (Expr n a) where
   subst n e (Negate x) = Negate (subst n e x)
   subst n e (Mul x y) = Mul (subst n e x) (subst n e y)
   subst n e (ExprLe x y) = ExprLe (subst n e x) (subst n e y)
-
+-}

@@ -101,7 +101,7 @@ onSomeF f (SomeF z) = f z
 
 data UnifyParts v f a
   -- = forall z x. (MonoFoldable z, Element z ~ a) => UnifyChildren (z -> a) z
-  = forall g. UnifyChildren (f v a) [SomeF (f v)]
+  = UnifyNode [SomeF (f v)]
   | UnifyLeaf (forall x. f v x -> Bool)
   | UnifyVar (UVar v)
 
@@ -310,61 +310,9 @@ unifyCts (Cts (DepPair2 x0 y0 : cts)) = do
       extendEnv xv y0 <$> unifyCts z
 
 
-    (UnifyChildren x xs, UnifyChildren y ys) -> do
-      zs <- mconcat . map (\(SomeF x, SomeF y) -> Cts [DepPair2 x y]) <$> zipSameLength (x, xs) (y, ys)
+    (UnifyNode xs, UnifyNode ys) -> do
+      zs <- mconcat . map (\(SomeF x, SomeF y) -> Cts [DepPair2 x y]) <$> zipSameLength (x0, xs) (y0, ys)
       unifyCts (zs <> Cts cts)
 
     _ -> cannotUnify x0 y0
-
-    -- (UnifyLeaf {}, UnifyChildren {}) -> cannotUnify x0 y0
-    -- (UnifyChildren {}, UnifyLeaf {}) -> cannotUnify x0 y0
-
-      -- -- swap
-    -- (Right x, Left y) -> do
-      -- -- extendEnv y x0
-      -- unifyCts (Cts cts)
-
-      -- -- eliminate
-    -- (Left x, Right y)
-      -- | x `notElem` freeUVars y0 && x `elem` (ctsFreeUVars (Cts cts)) -> do
-      --     undefined
-
-
-
--- unify :: (Unify f, Show a, Show b, Show1 f) => f a -> f b -> Unifier f ()
--- unify x y = unifyWorkList (generate x y)
-
--- -- unify' :: (Unify f, Show1 f, Show a, Show b) => f a -> f b -> Either UnifyError (Env UVar f)
--- -- unify' x = fmap _unifierEnv . execUnifier . unify x
-
--- -- unify'' :: (Unify f, Show UVar, Show1 f, Show a, Show b) => f a -> f b -> String
--- -- unify'' x y =
--- --   case unify' x y of
--- --     Left (UnifyError str) -> str
--- --     Right r -> show r
-
--- -- unify :: (Unify f, Show a, Show b, Show1 f) => f a -> f b -> Unifier f ()
--- -- unify x y =
--- --   case (unifyParts x, unifyParts y) of
--- --     (Left n, Right {}) ->
--- --         lookupEnv n >>= \case
--- --           Just (DepPair _ t) -> unify t y
--- --           Nothing -> extendEnv n y
-
--- --     (Right {}, Left n) -> unify y x
-
--- --     (Right (UnifyLeaf f), Right (UnifyLeaf g)) -> unifyGuard x y (f y && g x)
--- --     (Right (UnifyLeaf {}), Right (UnifyChildren {})) -> cannotUnify x y
--- --     (Right (UnifyChildren {}), Right (UnifyLeaf {})) -> cannotUnify x y
-
--- --     (Right (UnifyChildren f xs), Right (UnifyChildren g ys)) -> do
--- --       zipped <- zipSameLength (f, xs) (g, ys)
--- --       mapM_ (uncurry unify) zipped
-
--- --     (Left nX, Left nY) ->
--- --       liftA2 (,) (lookupEnv nX) (lookupEnv nY) >>= \case
--- --         (Nothing, Nothing) -> extendEnv nX y
--- --         (Just (DepPair _ xVal), Nothing) -> extendEnv nY xVal
--- --         (Nothing, Just (DepPair _ yVal)) -> extendEnv nX yVal
--- --         (Just (DepPair _ x), Just (DepPair _ y)) -> unify x y
 
