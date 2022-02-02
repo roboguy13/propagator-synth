@@ -17,8 +17,6 @@ module Expr
 import           Data.String
 import           GHC.Tuple (Solo (..))
 
-import           Data.MonoTraversable
-
 import           Subst
 import           Unify
 
@@ -30,12 +28,6 @@ data Pair a = Pair a a
 
 onPair :: (a -> a -> b) -> Pair a -> b
 onPair f (Pair x y) = f x y
-
-type instance Element (Pair a) = a
-type instance Element (Solo a) = a
-
-instance MonoFoldable (Solo a)
-instance MonoFoldable (Pair a)
 
 data Expr n a where
   ExprVar :: n -> Expr n Int
