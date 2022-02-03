@@ -11,6 +11,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 {-# OPTIONS_GHC -Wincomplete-patterns #-}
 
@@ -29,6 +30,8 @@ import           GHC.OverloadedLabels
 import           GHC.TypeLits
 
 import           Data.Proxy
+
+import           Text.Show.Deriving
 
 getSolo :: Solo a -> a
 getSolo (Solo x) = x
@@ -51,6 +54,8 @@ data Expr n a where
   Negate :: Expr n Int -> Expr n Int
   Mul :: Expr n Int -> Expr n Int -> Expr n Int
   ExprLe :: Expr n Int -> Expr n Int -> Expr n Bool
+
+deriveShow1 ''Expr
 
 pattern UV v = ExprUVar (UVar v ())
 

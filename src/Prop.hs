@@ -8,6 +8,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Prop
   where
@@ -20,6 +21,7 @@ import           Rewrite
 
 import           Data.Typeable
 import           Data.Functor.Classes
+import           Text.Show.Deriving
 
 data Prop n
   -- = PropVar Name
@@ -74,6 +76,9 @@ mulAnn = (#x `Mul` Lit 0) :=> Lit 0
 
 distr :: ExprFact
 distr = (#x `Mul` (#y `Add` #z)) :=> ((#x `Mul` #y) `Add` (#x `Mul` #z))
+
+-- test :: Expr () Int
+-- test = Lit 1 `Add` (Lit 2 `Add` Lit 3)
 
 -- -- Cmd axioms
 -- assignFact :: Expr () Int -> CmdFact
