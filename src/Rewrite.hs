@@ -29,7 +29,5 @@ applyRewrite :: (Unify f, Subst1 (UVar ()) (f ()), Subst1 (UVar Int) (f Int), Sh
 applyRewrite (Rewrite lhs rhs) e =
   case unify lhs e of
     Left {} -> Nothing
-    Right sub -> Just $ applyEnvSubst sub e
-
-
+    Right sub -> Just $ applyEnvSubst sub rhs
 
