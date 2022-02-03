@@ -14,6 +14,7 @@ module Prop
 import           Expr
 import           Cmd
 import           Subst
+import           Unify
 
 data Prop n
   -- = PropVar Name
@@ -46,6 +47,9 @@ isReducing (Rewrite lhs rhs) = rhs < lhs
 
 flipRewrite :: Rewrite a -> Rewrite a
 flipRewrite (Rewrite x y) = Rewrite y x
+
+applyRewrite :: Unify f => Rewrite (f v a) -> f v a -> f v a
+applyRewrite = undefined
 
 type ExprFact' n = Rewrite (Expr n Int)
 type CmdFact'  n = (Cmd n, Rewrite (DeepSubst n (Prop n)))

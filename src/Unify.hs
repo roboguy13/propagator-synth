@@ -22,6 +22,7 @@ import           Subst
 
 import           Control.Monad.State
 import           Control.Monad.Writer
+import           Control.Monad.Identity
 
 import           Control.Applicative
 
@@ -45,6 +46,14 @@ import           Data.Bitraversable
 
 import           Data.Typeable
 
+data UnifierState (f :: Type -> Type) =
+  UnifierState
+  { _unifierUniq :: Int
+  , _unifierVars :: [(String, Int)]
+  -- , _unifierEnv :: Env (UVar Int) f
+  }
+
+makeLenses ''UnifierState
 -- import           Data.MonoTraversable
 
 show1 :: (Show1 f, Show a) => f a -> String
@@ -122,11 +131,11 @@ class Unify (f :: Type -> Type -> Type) where
 
   traverseUVars :: Applicative g => (UVar v -> g (UVar v')) -> f v a -> g (f v' a)
 
-data DepPair' ct a f = forall z. ct z => DepPair a (f z)
+data DepPair a f = forall z. (Show z, Typeable z) => DepPair a (f z)
 
-type DepPair = DepPair' Show
+-- type DepPair = DepPair' Show
 
-instance (Show1 f, Show a) => Show (DepPair' Show a f) where
+instance (Show1 f, Show a) => Show (DepPair a f) where
   show (DepPair x fz) = "(" ++ show x ++ " |-> " ++ show1 fz ++ ")"
 
 data DepPair2 f g = forall a b. (Show a, Show b, Typeable a, Typeable b) => DepPair2 (f a) (g b)
@@ -158,8 +167,41 @@ lookupEnv x (Env (p@(DepPair x' _) : rest))
   | x' == x = Just p
   | otherwise = lookupEnv x (Env rest)
 
-extendEnv :: Show z => a -> f z -> Env a f -> Env a f
+extendEnv :: (Show z, Typeable z) => a -> f z -> Env a f -> Env a f
 extendEnv x y (Env e) = Env (DepPair x y : e)
+
+depPairOverFst :: (a -> b) -> DepPair a f -> DepPair b f
+depPairOverFst f (DepPair x y) = DepPair (f x) y
+
+depPairOverSnd :: (Show b, Typeable b, Show c) => (forall a. (Show a, Typeable a) => f a -> g b) -> DepPair c f -> DepPair c g
+depPairOverSnd f (DepPair x y) = DepPair x (f y)
+
+envMapKey :: (a -> b) -> Env a f -> Env b f
+envMapKey f (Env e) = Env (map (depPairOverFst f) e)
+
+envMapVal :: (Show b, Typeable b, Show c) => (forall a. (Show a, Typeable a) => f a -> g b) -> Env c f -> Env c g
+envMapVal f (Env e) = Env (map (depPairOverSnd f) e)
+
+type UnifySubst f = Env (UVar Int) (f Int)
+
+envForgetTags :: Unify f => Env (UVar Int) (f Int) -> Env (UVar ()) (f ())
+envForgetTags (Env e) = Env (map go e)
+  where
+    go (DepPair x y) = DepPair (forgetTag x) (forgetTags y)
+
+applyEnvSubst :: forall f a. (Unify f, Show a, Typeable a, Subst1 (UVar ()) (f ())) => UnifySubst f -> f () a -> f () a
+applyEnvSubst e0 fb = foldr go (forgetTags fb) e
+  where
+    Env e = envForgetTags e0
+
+    go :: DepPair (UVar ()) (f ()) -> f () a -> f () a
+    go (DepPair name s) z = subst1 name s z
+
+forgetTag :: UVar v -> UVar ()
+forgetTag (UVar n _) = UVar n ()
+
+forgetTags :: Unify f => f v a -> f () a
+forgetTags = runIdentity . traverseUVars (pure . forgetTag)
 
 newtype Cts f = Cts { getCts :: [DepPair2 f f] }
   deriving (Semigroup, Monoid, Show)
@@ -170,17 +212,10 @@ substCts v fva (Cts e) = Cts $ map (substDepPair2 v fva) e
 extendCts :: (Show a, Show b, Typeable a, Typeable b) => f a -> f b -> Cts f -> Cts f
 extendCts x y (Cts rest) = Cts (DepPair2 x y : rest)
 
-data UnifierState (f :: Type -> Type) =
-  UnifierState
-  { _unifierUniq :: Int
-  , _unifierVars :: [(String, Int)]
-  -- , _unifierEnv :: Env (UVar Int) f
-  }
-
-makeLenses ''UnifierState
 
 initState :: UnifierState f
 initState = UnifierState 0 mempty
+
 
 newtype UnifyError = UnifyError String
   deriving (Show)
