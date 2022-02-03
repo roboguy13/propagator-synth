@@ -1,0 +1,9 @@
+*.o
+*.so
+*.dylib
+*.dyn_o
+*.dyn_hi
+*.hi
+src/*.prof
+.DS_Store
+
