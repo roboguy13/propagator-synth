@@ -7,6 +7,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Prop
   where
@@ -15,6 +16,10 @@ import           Expr
 import           Cmd
 import           Subst
 import           Unify
+import           Rewrite
+
+import           Data.Typeable
+import           Data.Functor.Classes
 
 data Prop n
   -- = PropVar Name
@@ -32,24 +37,6 @@ deriving instance Show n => Show (Prop n)
 --   subst n s (SepConj x y) = SepConj (subst n s x) (subst n s y)
 
 pattern x :==: y = PropEqual x y
-
--- When rewriting, ensure that we are always either reducing the size of
--- the expression or applying rules that haven't been applied yet (or both).
-
-data Rewrite a =
-  Rewrite a a
-  deriving (Show)
-
-pattern x :=> y = Rewrite x y
-
-isReducing :: Ord a => Rewrite a -> Bool
-isReducing (Rewrite lhs rhs) = rhs < lhs
-
-flipRewrite :: Rewrite a -> Rewrite a
-flipRewrite (Rewrite x y) = Rewrite y x
-
-applyRewrite :: Unify f => Rewrite (f v a) -> f v a -> f v a
-applyRewrite = undefined
 
 type ExprFact' n = Rewrite (Expr n Int)
 type CmdFact'  n = (Cmd n, Rewrite (DeepSubst n (Prop n)))
