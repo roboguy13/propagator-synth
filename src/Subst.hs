@@ -10,7 +10,7 @@ module Subst
 
 import           Data.Typeable
 
-type Name = String
+-- type Name = String
 
 -- | Deep embedding of a "enrichment" of a given type with substitution
 data DeepSubst n a

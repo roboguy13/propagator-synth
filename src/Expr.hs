@@ -10,6 +10,9 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE PatternSynonyms #-}
+
+{-# OPTIONS_GHC -Wincomplete-patterns #-}
 
 module Expr
   where
@@ -21,6 +24,11 @@ import           Data.Void
 
 import           Subst
 import           Unify
+
+import           GHC.OverloadedLabels
+import           GHC.TypeLits
+
+import           Data.Proxy
 
 getSolo :: Solo a -> a
 getSolo (Solo x) = x
@@ -44,6 +52,12 @@ data Expr n a where
   Mul :: Expr n Int -> Expr n Int -> Expr n Int
   ExprLe :: Expr n Int -> Expr n Int -> Expr n Bool
 
+pattern UV v = ExprUVar (UVar v ())
+
+instance forall str a. KnownSymbol str => IsLabel str (Expr () a) where
+  fromLabel = ExprUVar (UVar (symbolVal (Proxy @str)) ())
+
+
   -- | Expr without unification variables
 type Expr' = Expr Void
 
@@ -56,6 +70,7 @@ instance IsString (Expr () Int) where
 
 exprSize :: Expr n a -> Int
 exprSize (ExprVar _) = 1
+exprSize (ExprUVar _) = 1
 exprSize (Lit _) = 1
 exprSize ExprTrue = 1
 exprSize ExprFalse = 1

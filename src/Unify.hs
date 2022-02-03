@@ -78,6 +78,11 @@ instance Eq host => Subst Int (UnifyVar host) where
 data UVar a = UVar String a
   deriving (Show, Eq)
 
+data Name a
+  = NameUV (UVar a)
+  | N String
+  deriving (Show, Eq)
+
 getUniq :: UVar Int -> Int
 getUniq (UVar _ i) = i
 
