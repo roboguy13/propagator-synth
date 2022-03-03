@@ -13,7 +13,7 @@ newtype Name = MkName String
 instance IsString Name where
   fromString = MkName
 
-data SuslikType = BoolType | IntType | ListType
+data SuslikType = BoolType | IntType | LocType deriving (Eq, Ord)
 
 data Expr a where
   Var :: Name -> Expr IntType

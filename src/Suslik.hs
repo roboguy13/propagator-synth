@@ -41,7 +41,7 @@ origSetMangle (MkName n) = "orig_set_" <> n
 reprType :: SuslikType -> String
 reprType BoolType = "int"
 reprType IntType  = "int"
-reprType ListType = "set"
+reprType LocType = "loc"
 
 -- class Repr a where
 --   reprType :: Proxy a -> Suslik
@@ -64,9 +64,9 @@ selfIsNull _ = False
 genStruct :: Struct -> Suslik
 genStruct (MkStruct name fields invs) =
   MkSuslik $ unlines'
-    [ "predicate " <> mangle name <> "(" <> intercalate ", " ("loc x" : map (("set " <>)) setArgStrings) <> ")"  --, " <> intercalate ", " (map (uncurry decl) fields) <> ") {"
+    [ "predicate " <> mangle name <> "(" <> intercalate ", " ("loc x" : argStrings) <> ")"  --, " <> intercalate ", " (map (uncurry decl) fields) <> ") {"
     , "{"
-    , unlines' $ map ("| " <>) $ genBranches name setArgs linked invs
+    , unlines' $ map ("| " <>) $ genBranches hasRec name (map fst args) linked invs
     -- , "  true => " <> intercalate " && " (map genExpr invs) <> " ; [x," <> show (length fields) <> "] ** " <> genLinks linked <> ";"
     , "}"
     ]
@@ -77,19 +77,24 @@ genStruct (MkStruct name fields invs) =
 
     notRecIn n = not $ recOccursIn name n (concatMap implRhs invs)
 
-    setArgStrings = map setMangle setArgs
+    -- setArgStrings = map setMangle setArgs
 
-    collecting =
-      if any (isRec name) (concatMap implRhs invs)
+    argStrings =
+      if hasRec
+        then map (("set " <>) . setMangle) (map fst args)
+        else map (\(n, ty) -> reprType ty <> " " <> mangle n) args
+
+    hasRec = any (isRec name) (concatMap implRhs invs)
+
+    args =
+      if True --any (isRec name) (concatMap implRhs invs)
         then
           nub' (
-            oldNames
-              ++
-            filter notRecIn (map fst fields)
+            -- oldNames
+            --   ++
+            filter (notRecIn . fst) fields
             )
         else []
-
-    setArgs = collecting
     -- setArgs = map fst collecting
     -- setArgs = map ("s" <>) $ map show [1 .. length collecting]
 
@@ -105,12 +110,12 @@ withParens :: Parens -> String -> String
 withParens NoParens = id
 withParens Parens = ("(" <>) . (<> ")")
 
-genBranches :: Name -> [Name] -> LinkedFields -> [StructInv] -> [String]
-genBranches recName setArgs linked = map (genBranch recName setArgs linked)
+genBranches :: Bool -> Name -> [Name] -> LinkedFields -> [StructInv] -> [String]
+genBranches hasRec recName setArgs linked = map (genBranch hasRec recName setArgs linked)
 
-genBranch :: Name -> [Name] -> LinkedFields -> StructInv -> String
+genBranch :: Bool -> Name -> [Name] -> LinkedFields -> StructInv -> String
 -- genBranch _ _      (_   :=> []) = ""
-genBranch recName setArgs linked (lhs :=> rhs) =
+genBranch hasRec recName setArgs linked (lhs :=> rhs) =
   genExpr lhs <> " => { " <> intercalate " && " (filter (not . null) (setArgUpdates : filter (not . all isSpace) (map genExpr rhs)))
     <> " ; " <>
     (if selfIsNull lhs
@@ -124,7 +129,9 @@ genBranch recName setArgs linked (lhs :=> rhs) =
     <> " }"
   where
     setArgUpdates =
-      intercalate " && " $ filter (not . null) $ filter (not . all isSpace) $ map go setArgs
+      if hasRec
+        then intercalate " && " $ filter (not . null) $ filter (not . all isSpace) $ map go setArgs
+        else []
       where
         setRhs setArg =
           if any (isRec recName) rhs
@@ -210,7 +217,7 @@ example :: Struct
 example =
   MkStruct
   { structName = "list"
-  , structFields = [("head", IntType), ("tail", ListType)]
+  , structFields = [("head", IntType), ("tail", LocType)]
   , structInvs = [IsNull Self       :=> []
                  ,Not (IsNull Self) :=> [Var "head" `Equal` Old "head"
                                         ,App "list" ["tail"]]]
@@ -222,10 +229,10 @@ example2 :: Struct
 example2 =
   MkStruct
   { structName = "person"
-  , structFields = [("self", IntType), ("isMarried", IntType), ("spouse", IntType)]
+  , structFields = [("me", LocType), ("isMarried", IntType), ("spouse", LocType)]
   , structInvs = [IsNull (Var "spouse") :=> [Var "isMarried" `Equal` Lit 0]
                  ,Not (IsNull (Var "spouse")) :=> [Var "isMarried" `Equal` Lit 1
-                                                  ,Not (Var "self" `Equal` Var "spouse")
+                                                  ,Not (Var "self" `Equal` Var "me")
                                                   ]
                  ]
   }
