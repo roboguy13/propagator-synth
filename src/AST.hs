@@ -78,6 +78,7 @@ implRhs (_ :=> y) = y
 data Struct =
   MkStruct
   { structName :: Name
+  , structParams :: [(Name, SuslikType)] -- | "Ghost" parameters
   , structFields :: [(Name, SuslikType)]
   , structInvs :: [StructInv]
   -- , structCollecting :: [(Name, [Name])] -- | Collect these into set arguments for the inductive predicate

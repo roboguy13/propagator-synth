@@ -62,9 +62,9 @@ selfIsNull (IsNull Self) = True
 selfIsNull _ = False
 
 genStruct :: Struct -> Suslik
-genStruct (MkStruct name fields invs) =
+genStruct (MkStruct name params fields invs) =
   MkSuslik $ unlines'
-    [ "predicate " <> mangle name <> "(" <> intercalate ", " ("loc x" : argStrings) <> ")"  --, " <> intercalate ", " (map (uncurry decl) fields) <> ") {"
+    [ "predicate " <> mangle name <> "(" <> intercalate ", " ("loc x" : paramStrings ++ argStrings) <> ")"  --, " <> intercalate ", " (map (uncurry decl) fields) <> ") {"
     , "{"
     , unlines' $ map ("| " <>) $ genBranches hasRec name (map fst args) linked invs
     -- , "  true => " <> intercalate " && " (map genExpr invs) <> " ; [x," <> show (length fields) <> "] ** " <> genLinks linked <> ";"
@@ -78,6 +78,8 @@ genStruct (MkStruct name fields invs) =
     notRecIn n = not $ recOccursIn name n (concatMap implRhs invs)
 
     -- setArgStrings = map setMangle setArgs
+
+    paramStrings = map (\(n, ty) -> reprType ty <> " " <> mangle n) params
 
     argStrings =
       if hasRec
@@ -222,6 +224,7 @@ listExample :: Struct
 listExample =
   MkStruct
   { structName = "list"
+  , structParams = []
   , structFields = [("head", IntType), ("tail", LocType)]
 
   , structInvs = [ IsNull Self       :=> []
@@ -236,6 +239,7 @@ personExample :: Struct
 personExample =
   MkStruct
   { structName = "person"
+  , structParams = []
   , structFields = [("me", LocType), ("isMarried", IntType), ("spouse", LocType)]
 
   , structInvs = [ IsNull (Var "spouse") :=> [Var "isMarried" .== Lit 0]
@@ -250,11 +254,12 @@ list2Example :: Struct
 list2Example =
   MkStruct
   { structName = "list2"
+  , structParams = []
   , structFields = [("v", IntType), ("tail", IntType)]
 
   , structInvs = [ IsNull Self       :=> []
 
-                 , Not (IsNull Self) :=> [ Var "v" .== (Lit 2 .* (Old "v"))
+                 , Not (IsNull Self) :=> [ Var "v" .== (Lit 2 .* Old "v")
                                          , App "list2" ["tail"]
                                          ]
                  ]
@@ -264,15 +269,32 @@ budgetExample :: Struct
 budgetExample =
   MkStruct
   { structName = "budget"
+  , structParams = []
   , structFields = [("w", IntType), ("d", IntType), ("nxt", LocType)]
 
   , structInvs = [ IsNull Self :=> []
-                 , Not (IsNull Self) :=> [ Var "w" .== (Lit 7 .* (Var "d"))
+                 , Not (IsNull Self) :=> [ Var "w" .== (Lit 7 .* Var "d")
                                          , App "budget" ["nxt"]
                                          ]
                  ]
   }
 
+budgetColaExample :: Struct
+budgetColaExample =
+  MkStruct
+  { structName = "budget2"
+  , structParams = [("cola", IntType)]
+  , structFields = [("w", IntType), ("d", IntType), ("nxt", LocType)]
+
+  , structInvs = [ IsNull Self :=> []
+                 , Not (IsNull Self) :=> [ Old "w" .== (Lit 7 .* Old "d")
+                                         , Var "w" .== (Lit 7 .* Var "d")
+                                         , Var "d" .== (Var "cola" .* Old "d")
+
+                                         , App "budget2" ["nxt", "cola"]
+                                         ]
+                 ]
+  }
 
 -- predicate list2(loc x, set s)
 -- {
