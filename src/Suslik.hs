@@ -135,8 +135,13 @@ genBranch hasRec recName setArgs linked (lhs :=> rhs) =
       where
         setRhs setArg =
           if any (isRec recName) rhs
-            then setUnion (setSingleton (Old setArg)) (origSetMangle setArg)
+            then setUnion (setSingleton origSetArg) (origSetMangle setArg)
             else "{}"
+            where
+              origSetArg =
+                if setArg `elem` concatMap exprOldNames rhs
+                  then Old setArg
+                  else Var setArg
 
         go setArg = setMangle setArg <> " =i " <> setRhs setArg
 
@@ -213,45 +218,60 @@ decl n ty = reprType ty <> " " <> mangle n
 generate :: Suslik -> String
 generate (MkSuslik s) = s
 
-example :: Struct
-example =
+listExample :: Struct
+listExample =
   MkStruct
   { structName = "list"
   , structFields = [("head", IntType), ("tail", LocType)]
-  , structInvs = [IsNull Self       :=> []
 
-                 ,Not (IsNull Self) :=> [ Var "head" .== Old "head"
-                                        , App "list" ["tail"]
-                                        ]
+  , structInvs = [ IsNull Self       :=> []
+
+                 , Not (IsNull Self) :=> [ Var "head" .== Old "head"
+                                         , App "list" ["tail"]
+                                         ]
                  ]
   }
 
-example2 :: Struct
-example2 =
+personExample :: Struct
+personExample =
   MkStruct
   { structName = "person"
   , structFields = [("me", LocType), ("isMarried", IntType), ("spouse", LocType)]
-  , structInvs = [IsNull (Var "spouse") :=> [Var "isMarried" .== Lit 0]
 
-                 ,Not (IsNull (Var "spouse")) :=> [ Var "isMarried" .== Lit 1
-                                                  , Not (Var "self" .== Var "me")
-                                                  ]
+  , structInvs = [ IsNull (Var "spouse") :=> [Var "isMarried" .== Lit 0]
+
+                 , Not (IsNull (Var "spouse")) :=> [ Var "isMarried" .== Lit 1
+                                                   , Not (Var "self" .== Var "me")
+                                                   ]
                  ]
   }
 
-example3 :: Struct
-example3 =
+list2Example :: Struct
+list2Example =
   MkStruct
   { structName = "list2"
   , structFields = [("v", IntType), ("tail", IntType)]
+
   , structInvs = [ IsNull Self       :=> []
 
-                 , Not (IsNull Self) :=> [ Var "v" .== ((Lit 2) .* (Old "v"))
+                 , Not (IsNull Self) :=> [ Var "v" .== (Lit 2 .* (Old "v"))
                                          , App "list2" ["tail"]
                                          ]
                  ]
   }
 
+budgetExample :: Struct
+budgetExample =
+  MkStruct
+  { structName = "budget"
+  , structFields = [("w", IntType), ("d", IntType), ("nxt", LocType)]
+
+  , structInvs = [ IsNull Self :=> []
+                 , Not (IsNull Self) :=> [ Var "w" .== (Lit 7 .* (Var "d"))
+                                         , App "budget" ["nxt"]
+                                         ]
+                 ]
+  }
 
 
 -- predicate list2(loc x, set s)
