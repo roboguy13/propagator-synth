@@ -47,6 +47,13 @@ data Expr a where
 
   Apply :: PredApply -> Expr BoolType
 
+(.==) = Equal
+(.*) = Mul
+(.+) = Add
+(.-) = Sub
+(.&&) = And
+(.||) = Or
+
  -- | Predicate application
 data PredApply where
   MkPredApply :: Name -> [Name] -> PredApply

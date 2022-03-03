@@ -219,10 +219,11 @@ example =
   { structName = "list"
   , structFields = [("head", IntType), ("tail", LocType)]
   , structInvs = [IsNull Self       :=> []
-                 ,Not (IsNull Self) :=> [Var "head" `Equal` Old "head"
-                                        ,App "list" ["tail"]]]
-  -- , structCollecting = [("items", ["head"])]
-  -- , structInvs = [ExprBool True :=> [ExprBool True]]
+
+                 ,Not (IsNull Self) :=> [ Var "head" .== Old "head"
+                                        , App "list" ["tail"]
+                                        ]
+                 ]
   }
 
 example2 :: Struct
@@ -230,9 +231,10 @@ example2 =
   MkStruct
   { structName = "person"
   , structFields = [("me", LocType), ("isMarried", IntType), ("spouse", LocType)]
-  , structInvs = [IsNull (Var "spouse") :=> [Var "isMarried" `Equal` Lit 0]
-                 ,Not (IsNull (Var "spouse")) :=> [Var "isMarried" `Equal` Lit 1
-                                                  ,Not (Var "self" `Equal` Var "me")
+  , structInvs = [IsNull (Var "spouse") :=> [Var "isMarried" .== Lit 0]
+
+                 ,Not (IsNull (Var "spouse")) :=> [ Var "isMarried" .== Lit 1
+                                                  , Not (Var "self" .== Var "me")
                                                   ]
                  ]
   }
@@ -242,8 +244,9 @@ example3 =
   MkStruct
   { structName = "list2"
   , structFields = [("v", IntType), ("tail", IntType)]
-  , structInvs = [ IsNull Self       :=> [ ]
-                 , Not (IsNull Self) :=> [ Var "v" `Equal` (Mul (Lit 2) (Old "v"))
+  , structInvs = [ IsNull Self       :=> []
+
+                 , Not (IsNull Self) :=> [ Var "v" .== ((Lit 2) .* (Old "v"))
                                          , App "list2" ["tail"]
                                          ]
                  ]
