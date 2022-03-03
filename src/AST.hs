@@ -59,6 +59,7 @@ data PredApply where
   MkPredApply :: Name -> [Name] -> PredApply
 
 pattern App f args = Apply (MkPredApply f args)
+pattern Param x = Var x -- TODO: Should this be more than just a pattern synonym?
 
 data Cmd where
   Assign :: Name -> Expr IntType -> Cmd

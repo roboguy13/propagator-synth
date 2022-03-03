@@ -289,7 +289,7 @@ budgetColaExample =
   , structInvs = [ IsNull Self :=> []
                  , Not (IsNull Self) :=> [ Old "w" .== (Lit 7 .* Old "d")
                                          , Var "w" .== (Lit 7 .* Var "d")
-                                         , Var "d" .== (Var "cola" .* Old "d")
+                                         , Var "d" .== (Param "cola" .* Old "d")
 
                                          , App "budget2" ["nxt", "cola"]
                                          ]
