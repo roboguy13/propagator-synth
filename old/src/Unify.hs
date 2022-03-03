@@ -14,6 +14,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Unify
   where
@@ -30,6 +31,7 @@ import           Data.Coerce
 import           Data.Kind
 
 import           Data.String
+import           Data.Void
 
 import           Data.Functor.Classes
 
@@ -157,6 +159,11 @@ instance (Show1 f, Show1 g) => Show (DepPair2 f g) where
 
 newtype Env a f = Env [DepPair a f]
   deriving (Show)
+
+env0 :: (Show b, Typeable b) => Env a (Unify0 f b) -> [(a, f b)]
+env0 (Env xs) = map go xs
+  where
+    go (DepPair x (Unify0 y)) = (x, y)
 
 emptyEnv :: Env a f
 emptyEnv = Env []
@@ -317,7 +324,10 @@ ctsFreeUVars (Cts (DepPair2 x y : rest)) = freeUVars x ++ freeUVars y ++ ctsFree
 initialCt :: (Show a, Show b, Typeable a, Typeable b) => f Int a -> f Int b -> Cts (f Int)
 initialCt x y = Cts [DepPair2 x y]
 
-unify :: (Unify f, Subst1 (UVar Int) (f Int), Show a, Show b, Typeable a, Typeable b, Show1 (f Int)) => f () a -> f () b -> Either UnifyError (Env (UVar Int) (f Int))
+unify0 :: (Unify (Unify0 f), Subst1 (UVar Int) (Unify0 f Int), Show1 (Unify0 f Int)) => f () -> f () -> Either UnifyError [(UVar Int, f Int)]
+unify0 x y = fmap env0 (unify @Void @Void (Unify0 x) (Unify0 y))
+
+unify :: forall a b f. (Unify f, Subst1 (UVar Int) (f Int), Show a, Show b, Typeable a, Typeable b, Show1 (f Int)) => f () a -> f () b -> Either UnifyError (Env (UVar Int) (f Int))
 unify x0 y0 = evalUnifier $ do
   x <- tagUVars x0
   y <- tagUVars y0
