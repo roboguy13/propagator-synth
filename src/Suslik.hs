@@ -245,7 +245,7 @@ personExample =
   , structInvs = [ IsNull (Var "spouse") :=> [Var "isMarried" .== Lit 0]
 
                  , Not (IsNull (Var "spouse")) :=> [ Var "isMarried" .== Lit 1
-                                                   , Not (Var "self" .== Var "me")
+                                                   , Not (Var "me" .== Var "spouse")
                                                    ]
                  ]
   }
